@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EmbyTogether</title>
+</head>
+<body>
+    <div data-role="page" class="page type-interior pluginConfigurationPage embytogetherConfigurationPage" data-require="emby-button,emby-select,emby-input,emby-checkbox,emby-linkbutton">
+
+        <div data-role="content">
+            <div class="content-primary">
+
+                <p>
+                    EmbyTogether enables multiple Clients to watch content simultaneously. There is no User-Interface, so sessions have to be automagically generated.
+                    Because of this, it is only possible to synchronize clients logged into the same user account.
+                </p><p>
+                    When one client Pauses, Unpauses or Seeks, the command is propagated to all other clients on the same account that are playing the same content.
+                </p><p>
+                    The commands are extracted from status messages, which each client periodically (once per second) sends to the server. Because of latency and the 'sparseness' of these messages the sync will never be perfect.
+                    Better sync would require client modifications and is not possible via a simple plugin.
+                </p>
+
+                <form class="embytogetherConfigurationForm">
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused">
+                            Seconds between commands [Play/Pause] from the same User
+                        </label>
+                        <input is="emby-input" type="number" id="Timeoffset_cmd_same_user" />
+                        <div class="fieldDescription checkboxFieldDescription">Needed to avoid feedback loops. This affects only Play/Pause. Seeking is treated seperately, not considered a command.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused">
+                           Seconds between commands [Play/Pause] from different Users.
+                        </label>
+                        <input is="emby-input" type="number" id="Timeoffset_cmd_diff_user" />
+                        <div class="fieldDescription checkboxFieldDescription">Because of network latency this might need to be larger than from the same user.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused">
+                           Maximum Client Offset in Seconds
+                        </label>
+                        <input is="emby-input" type="number" id="Timeoffset_seek" />
+                        <div class="fieldDescription checkboxFieldDescription">This is mainly used to detect Seeking. If one Client is more than this amount different from the previous one, seek all clients to the current one. </div>
+                    </div>
+
+                    <div>
+                        <h3 class="checkboxListLabel">
+                            On which Users shall the Plugin be active?
+                        </h3>
+                        <div class="paperList checkboxList-paperList" id="userlist">
+
+                        </div>
+                    </div>
+
+                    <br />
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+
+        <script type="text/javascript">
+            (function () {
+                var pluginId = "A45ECC1E-4301-4DC2-B515-173EAEF32B49";
+                $('.embytogetherConfigurationPage').on('pageshow', function (event) {
+                    var page = this;
+
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        
+                        page.querySelector('#Timeoffset_seek').value = config.Timeoffset_seek;
+                        page.querySelector('#Timeoffset_cmd_same_user').value = config.Timeoffset_cmd_same_user;
+                        page.querySelector('#Timeoffset_cmd_diff_user').value = config.Timeoffset_cmd_diff_user;
+
+                        var guids = config.SelectedGUIDs || [];
+
+                        // Load Users
+                        ApiClient.getUsers().then(function (users) {
+                            $.each(users, function (i, user) {
+                                var checked = guids.includes(user.Id) ? 'checked' : '';
+                                $('#userlist').append('<div><label> <input is="emby-checkbox" type="checkbox" guid="' + user.Id + '" '+checked+'/><span> ' + user.Name + ' </span></label></div>');
+                            });
+                        });
+                        
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+
+                $('.embytogetherConfigurationForm').off('submit.plugin').on('submit.plugin', function (e) {
+                    console.log('save pressed!');
+                    Dashboard.showLoadingMsg();
+                    var form = this;
+
+                    //Get List of Selected GUIDs
+                    form.selectedGUIDs = [];
+                    $('#userlist').find('input').each(function (a) {
+                        if (this.checked) {
+                            form.selectedGUIDs.push(this.getAttribute('guid'));
+                        }
+                    });
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        config.Timeoffset_seek = form.querySelector('#Timeoffset_seek').value;
+                        config.Timeoffset_cmd_same_user = form.querySelector('#Timeoffset_cmd_same_user').value;
+                        config.Timeoffset_cmd_diff_user = form.querySelector('#Timeoffset_cmd_diff_user').value;
+                        
+                        config.SelectedGUIDs = form.selectedGUIDs;
+                        console.log(form.selectedGUIDs);
+                        ApiClient.updatePluginConfiguration(pluginId, config).then(Dashboard.processPluginConfigurationUpdateResult);
+                    });
+                    return false;
+                });
+
+
+            })();
+        </script>
+    </div>
+</body>
+</html>
